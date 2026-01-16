@@ -1,0 +1,7 @@
+pip~=25.3
+pandas~=2.3.3
+streamlit==1.53.0
+sqlalchemy==2.0.45
+psycopg2-binary==2.9.11
+plotly==6.5.2
+openai==2.15.0
