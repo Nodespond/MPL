@@ -4,15 +4,13 @@ import psycopg2
 from datetime import datetime, timedelta
 import io
 
-# Настройки страницы
 st.set_page_config(
-    page_title="СПБ Данные",
+    page_title="Данные торгов",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Стили CSS для улучшения вида
 st.markdown("""
 <style>
     .main-header {
@@ -31,11 +29,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# Функция подключения к БД
 @st.cache_resource
 def get_db_connection():
-    """Создает подключение к PostgreSQL"""
     try:
         conn = psycopg2.connect(
             host=st.secrets["DB_HOST"],
@@ -51,7 +46,6 @@ def get_db_connection():
 
 
 def load_data_from_db():
-    """Загружает данные из базы данных"""
     conn = get_db_connection()
     if conn:
         try:
@@ -70,33 +64,25 @@ def load_data_from_db():
 
 
 def filter_data(df, filters):
-    """Фильтрует данные по заданным критериям"""
     filtered_df = df.copy()
 
-    # Фильтр по дате
     if filters['start_date'] and filters['end_date']:
-        # Приведем все к datetime для единообразного сравнения
         start_date = pd.to_datetime(filters['start_date'])
         end_date = pd.to_datetime(filters['end_date'])
 
-        # Преобразуем даты в DataFrame к datetime
         filtered_df['Дата_dt'] = pd.to_datetime(filtered_df['Дата'])
 
-        # Сравниваем как datetime (но учитываем только дату)
         mask = (filtered_df['Дата_dt'] >= start_date) & \
                (filtered_df['Дата_dt'] <= (end_date + pd.Timedelta(days=1)))
         filtered_df = filtered_df[mask]
         filtered_df = filtered_df.drop('Дата_dt', axis=1)  # Удаляем вспомогательную колонку
 
-    # Фильтр по инструментам
     if filters['selected_instruments']:
         filtered_df = filtered_df[filtered_df['КодИнструмента'].isin(filters['selected_instruments'])]
 
-    # Фильтр по типу товара
     if filters['selected_products']:
         filtered_df = filtered_df[filtered_df['Товар'].isin(filters['selected_products'])]
 
-    # Фильтр по диапазону цен
     if filters['min_price'] is not None:
         filtered_df = filtered_df[filtered_df['СреднЦена'] >= filters['min_price']]
     if filters['max_price'] is not None:
@@ -106,7 +92,6 @@ def filter_data(df, filters):
 
 
 def export_to_excel(df):
-    """Экспортирует DataFrame в Excel"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='СПБ_Данные')
@@ -114,16 +99,12 @@ def export_to_excel(df):
 
 
 def export_to_csv(df):
-    """Экспортирует DataFrame в CSV"""
     return df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
 
-
-# Основное приложение
 def main():
     # Заголовок
-    st.markdown('<h1 class="main-header">📊 СПБ Данные - Анализ торгов</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">📊 Анализ данных торгов</h1>', unsafe_allow_html=True)
 
-    # Загрузка данных
     with st.spinner('Загрузка данных из базы...'):
         df = load_data_from_db()
 
@@ -131,7 +112,6 @@ def main():
         st.warning("Нет данных для отображения")
         return
 
-    # Боковая панель с фильтрами
     with st.sidebar:
         st.header("🔍 Фильтры")
 
@@ -184,7 +164,6 @@ def main():
             step=1000.0
         )
 
-        # Кнопка применения фильтров
         apply_filters = st.button("Применить фильтры", type="primary")
 
     if 'filtered_df' not in st.session_state:
@@ -217,17 +196,12 @@ def main():
         if max_price > 0 and max_price >= min_price:
             filtered_df = filtered_df[filtered_df['СреднЦена'] <= max_price]
 
-        # Сохраняем результат в session_state
         st.session_state.filtered_df = filtered_df
 
-    # Используем сохранённый результат (или исходные данные, если фильтр ещё не применяли)
     filtered_df = st.session_state.filtered_df
 
-    # Показываем сколько записей осталось
     st.info(f"Найдено записей после фильтров: **{len(filtered_df)}**")
-    # ───────────────────────────────────────────────────────────────
 
-    # Панель статистики
     st.subheader("📈 Статистика")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -236,18 +210,15 @@ def main():
         st.metric("Уникальных инструментов", filtered_df['КодИнструмента'].nunique())
     with col3:
         avg_price = filtered_df['СреднЦена'].mean()
-        st.metric("Средняя цена", f"{avg_price:,.0f} ₽" if not pd.isna(avg_price) else "N/A")
+        st.metric("Средняя цена", f"{avg_price:,.0f} Руб." if not pd.isna(avg_price) else "N/A")
     with col4:
         total_volume = filtered_df['ОбъемДоговоровРуб'].sum()
-        st.metric("Общий объем", f"{total_volume:,.0f} ₽" if not pd.isna(total_volume) else "N/A")
+        st.metric("Общий объем", f"{total_volume:,.0f} Руб." if not pd.isna(total_volume) else "N/A")
 
-    # Таблица с данными
     st.subheader("📋 Данные")
 
-    # Настройки отображения таблицы
     col1, col2 = st.columns([3, 1])
     with col2:
-        # Выбор колонок для отображения
         all_columns = list(filtered_df.columns)
         default_columns = ['Дата', 'КодИнструмента', 'Товар', 'СреднЦена', 'ОбъемДоговоровРуб']
         visible_columns = st.multiselect(
@@ -261,7 +232,6 @@ def main():
     else:
         display_df = filtered_df
 
-    # Сортировка
     sort_column = st.selectbox(
         "Сортировать по",
         options=display_df.columns,
@@ -271,14 +241,12 @@ def main():
 
     display_df = display_df.sort_values(by=sort_column, ascending=sort_ascending)
 
-    # Отображение таблицы
     st.dataframe(
         display_df,
         use_container_width=True,
         height=400
     )
 
-    # Экспорт данных
     st.subheader("📤 Экспорт данных")
     col1, col2 = st.columns(2)
 
